@@ -2,15 +2,20 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 
+# PAGE CONFIG
 st.set_page_config(page_title="Bike Sharing Dashboard", layout="centered")
 
-st.title("Bike Sharing Dashboard")
-st.write("Dashboard analisis data penyewaan sepeda")
+st.title("🚲 Bike Sharing Dashboard")
+st.write("Dashboard interaktif analisis penyewaan sepeda")
 
+# LOAD DATA
 day_df = pd.read_csv("day.csv")
 hour_df = pd.read_csv("hour.csv")
 
-# mapping season
+day_df['dteday'] = pd.to_datetime(day_df['dteday'])
+hour_df['dteday'] = pd.to_datetime(hour_df['dteday'])
+
+# Mapping
 season_map = {
     1: 'Spring',
     2: 'Summer',
@@ -18,7 +23,6 @@ season_map = {
     4: 'Winter'
 }
 
-# mapping weather
 weather_map = {
     1: 'Clear',
     2: 'Mist + Cloudy',
@@ -29,98 +33,89 @@ weather_map = {
 day_df['season_name'] = day_df['season'].map(season_map)
 hour_df['weather_name'] = hour_df['weathersit'].map(weather_map)
 
-# =====================================
-# KPI
-# =====================================
-st.subheader("Key Metrics")
+# SIDEBAR FILTER
+st.sidebar.header("🔍 Filter Data")
 
-col1, col2, col3 = st.columns(3)
+# Filter tanggal
+start_date = st.sidebar.date_input(
+    "Tanggal Mulai",
+    day_df['dteday'].min()
+)
 
-with col1:
-    st.metric("Total Penyewaan", f"{hour_df['cnt'].sum():,}")
+end_date = st.sidebar.date_input(
+    "Tanggal Akhir",
+    day_df['dteday'].max()
+)
 
-with col2:
-    st.metric("Rata-rata per Jam", f"{hour_df['cnt'].mean():.2f}")
+# Filter musim
+selected_season = st.sidebar.selectbox(
+    "Pilih Musim",
+    ["All"] + list(day_df['season_name'].unique())
+)
 
-with col3:
-    peak_hour = hour_df.groupby('hr')['cnt'].mean().idxmax()
-    st.metric("Peak Hour", f"{peak_hour}:00")
+# Filter cuaca
+selected_weather = st.sidebar.selectbox(
+    "Pilih Cuaca",
+    ["All"] + list(hour_df['weather_name'].unique())
+)
 
-# =====================================
-# CHART 1 - PER JAM
-# =====================================
-st.subheader("Rata-rata Penyewaan per Jam")
+# APPLY FILTER
+filtered_day = day_df[
+    (day_df['dteday'] >= pd.to_datetime(start_date)) &
+    (day_df['dteday'] <= pd.to_datetime(end_date))
+]
 
-hourly_rent = hour_df.groupby('hr')['cnt'].mean()
+filtered_hour = hour_df[
+    (hour_df['dteday'] >= pd.to_datetime(start_date)) &
+    (hour_df['dteday'] <= pd.to_datetime(end_date))
+]
 
-fig, ax = plt.subplots(figsize=(5,3))
+if selected_season != "All":
+    filtered_day = filtered_day[
+        filtered_day['season_name'] == selected_season
+    ]
+
+if selected_weather != "All":
+    filtered_hour = filtered_hour[
+        filtered_hour['weather_name'] == selected_weather
+    ]
+
+# VISUALIZATION 1 - JAM
+st.subheader("🕒 Rata-rata Penyewaan per Jam")
+
+hourly_rent = filtered_hour.groupby('hr')['cnt'].mean()
+
+fig, ax = plt.subplots(figsize=(6,3))
 hourly_rent.plot(kind='line', marker='o', ax=ax)
 ax.set_xlabel("Jam")
-ax.set_ylabel("Jumlah Penyewaan")
+ax.set_ylabel("Jumlah")
 ax.set_title("Pola Penyewaan per Jam")
 ax.grid(True)
 
 st.pyplot(fig)
 
-# =====================================
-# CHART 2 - CUACA
-# =====================================
-st.subheader("Rata-rata Berdasarkan Cuaca")
+# VISUALIZATION 2 - CUACA
+st.subheader("🌦️ Rata-rata Berdasarkan Cuaca")
 
-weather_avg = hour_df.groupby('weather_name')['cnt'].mean()
+weather_avg = filtered_hour.groupby('weather_name')['cnt'].mean()
 
-fig, ax = plt.subplots(figsize=(5,3))
+fig, ax = plt.subplots(figsize=(6,3))
 weather_avg.plot(kind='bar', ax=ax)
 ax.set_xlabel("Cuaca")
-ax.set_ylabel("Jumlah Penyewaan")
+ax.set_ylabel("Jumlah")
 ax.set_title("Penyewaan Berdasarkan Cuaca")
-ax.set_xticklabels(weather_avg.index, rotation=45)
 
 st.pyplot(fig)
 
-# =====================================
-# CHART 3 - MUSIM
-# =====================================
-st.subheader("Rata-rata Berdasarkan Musim")
+# VISUALIZATION 3 - MUSIM
+st.subheader("🍂 Rata-rata Berdasarkan Musim")
 
-season_avg = day_df.groupby('season_name')['cnt'].mean()
+season_avg = filtered_day.groupby('season_name')['cnt'].mean()
 
-fig, ax = plt.subplots(figsize=(5,3))
+fig, ax = plt.subplots(figsize=(6,3))
 season_avg.plot(kind='bar', ax=ax)
 ax.set_xlabel("Musim")
-ax.set_ylabel("Jumlah Penyewaan")
+ax.set_ylabel("Jumlah")
 ax.set_title("Penyewaan Berdasarkan Musim")
 
 st.pyplot(fig)
-
-# =====================================
-# CHART 4 - CORRELATION
-# =====================================
-st.subheader("Correlation Heatmap")
-
-corr = hour_df[['temp', 'atemp', 'hum', 'windspeed', 'cnt']].corr()
-
-fig, ax = plt.subplots(figsize=(5,3))
-cax = ax.imshow(corr, interpolation='nearest')
-fig.colorbar(cax)
-
-ax.set_xticks(range(len(corr.columns)))
-ax.set_xticklabels(corr.columns, rotation=45)
-
-ax.set_yticks(range(len(corr.columns)))
-ax.set_yticklabels(corr.columns)
-
-ax.set_title("Correlation Matrix")
-
-st.pyplot(fig)
-
-# =====================================
-# CONCLUSION
-# =====================================
-st.subheader("Insight Utama")
-st.write("""
-- Peak demand terjadi pada jam 08.00 dan 17.00–18.00
-- Cuaca cerah menghasilkan penyewaan tertinggi
-- Musim Fall memiliki rata-rata demand tertinggi
-- Suhu merupakan faktor yang paling memengaruhi penyewaan
-""")
